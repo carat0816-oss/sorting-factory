@@ -1,0 +1,24 @@
+<main class="factory" tabindex="0" aria-label="仕分け工場ゲーム">
+  <section id="intro">
+    <div class="eyebrow">SORTING FACTORY / 30 SECOND SHIFT</div>
+    <h1>その荷物、どっち？</h1>
+    <p class="lead">流れてくる荷物を左右に仕分けよう。<br>ルール変更に気をつけて、コンボをつなげ！</p>
+    <label for="mode">モードを選ぶ</label><select id="mode"><option value="normal">ノーマル — 左右の仕分け</option><option value="hard">ハード — 色は固定・形を見て蹴る！</option></select><div id="hard-rules" class="rules-preview" hidden><div><b>01 / 0–10秒</b><p>四角は蹴る。それ以外：オレンジは左、青は右</p></div><div><b>02 / 10–20秒</b><p>丸は蹴る。それ以外：オレンジは左、青は右</p></div><div><b>03 / 20–30秒</b><p>三角は蹴る。それ以外：オレンジは左、青は右</p></div><p>蹴る条件を優先！ 対象は1.5秒以内にボタンかSpaceで蹴ろう。</p></div><div id="normal-rules" class="rules-preview">
+      <div><b>01 <span>0–10秒</span></b><p>色を見る<br><strong>青 → 左 ／ オレンジ → 右</strong></p></div>
+      <div><b>02 <span>10–20秒</span></b><p>形を見る<br><strong>丸 → 左 ／ 四角 → 右</strong></p></div>
+      <div><b>03 <span>20–30秒</span></b><p>色を見る。ただし★は逆！<br><strong>★青 → 右 ／ ★オレンジ → 左</strong></p></div>
+    </div>
+    <p class="hint">画面のボタン、または ← → キーで操作。<br>普通の荷物は3秒、ハードの蹴る対象は1.5秒で次へ。実プレイ30秒＋切り替え休憩2秒×2回でリザルトへ。</p>
+    <button id="start" class="primary">30秒チャレンジを開始 →</button>
+  </section>
+  <section id="play" hidden>
+    <div class="stats"><div>残り <strong id="remaining">30.0</strong> 秒</div><div><strong id="score">0</strong> pt</div><div><strong id="combo">0</strong> combo</div></div>
+    <div class="timeline"><div id="progress"></div></div>
+    <div id="rulebox"><span id="phase"></span><h2 id="rule"></h2><p id="mapping"></p></div>
+    <div class="conveyor"><div id="pause" hidden><strong>ルール変更</strong><p>タイマーを止めています</p><b><span id="pause-count">2</span> 秒後に再開</b></div><div id="parcel"><div id="symbol"></div><div id="star"></div><span id="label"></span></div></div>
+    <div class="item-timer" aria-label="荷物の残り時間"><div id="item-progress"></div></div><div id="feedback" aria-live="polite">準備OK！</div>
+    <div class="choices"><button id="left">← 左へ</button><button id="right">右へ →</button></div>
+    <button id="kick" hidden>🦶 蹴っ飛ばす <small>Space</small></button><p id="control-hint" class="hint"></p>
+  </section>
+  <section id="done" hidden><h2>シフト終了！</h2><p>リザルトを集計しています…</p></section>
+</main>

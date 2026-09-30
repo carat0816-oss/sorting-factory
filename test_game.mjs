@@ -1,0 +1,77 @@
+import fs from 'node:fs';
+import vm from 'node:vm';
+import assert from 'node:assert/strict';
+const source = fs.readFileSync(new URL('./game.js', import.meta.url), 'utf8').replace('export default function', 'function mount');
+function setup(random = Math.random) {
+ let now = 0, nextFrame, result, keyHandler;
+ const elements = new Map();
+ const element = id => {if(!elements.has(id)) elements.set(id, {style:{}, classList:{remove(){},add(){}}, focus(){},scrollIntoView(){},hidden:false}); return elements.get(id)};
+ const context = {performance:{now:()=>now}, Math: Object.assign(Object.create(Math), {random}), document:{hidden:false,addEventListener(){},removeEventListener(){}}, requestAnimationFrame: cb=>{nextFrame=cb;return 1}, cancelAnimationFrame(){}};
+ vm.createContext(context); vm.runInContext(source, context);
+ context.mount({parentElement:{querySelector:element,addEventListener(type, handler){keyHandler=handler},removeEventListener(){}},setStateValue:(key,value)=>{result=value}});
+ return {key:(key,repeat=false)=>keyHandler({key,repeat,preventDefault(){}}), el:element, start:()=>element('#start').onclick(), at:t=>{now=t; nextFrame(t)}, result:()=>result};
+}
+const game = setup(); game.start();
+assert.match(game.el('#rule').textContent,/色/);
+game.at(1000);
+const blue = game.el('#label').textContent.startsWith('青');
+game.el(blue ? '#left':'#right').onclick();
+assert.equal(game.el('#score').textContent,100);
+game.at(10000); assert.match(game.el('#rule').textContent,/形/);
+assert.equal(game.el('#remaining').textContent,'20.0');
+assert.equal(game.el('#left').disabled,true);
+game.el('#left').onclick();
+assert.equal(game.el('#score').textContent,100);
+game.at(11999); assert.equal(game.el('#remaining').textContent,'20.0');
+game.at(12000); assert.equal(game.el('#left').disabled,false);
+game.at(13000);
+const circle = game.el('#label').textContent.includes('丸');
+game.el(circle ? '#left':'#right').onclick();
+game.at(22000); assert.match(game.el('#rule').textContent,/★/);
+assert.equal(game.el('#remaining').textContent,'10.0');
+assert.equal(game.el('#left').disabled,true);
+game.at(24000); assert.equal(game.el('#left').disabled,false);
+game.at(30000); assert.equal(game.result(),undefined);
+game.at(34000); assert.equal(game.result().duration_seconds,30);
+assert.equal(game.result().rows[0].reaction_ms,1000);
+assert.equal(game.result().score,210);
+const phase2 = game.result().rows.find(r=>r.phase===1 && r.correct);
+assert.equal(phase2.reaction_ms,1000);
+assert.equal(phase2.elapsed_s,11);
+assert.equal(phase2.phase_elapsed_s,0);
+const idle = setup(); idle.start();
+for(let t=100;t<=34000;t+=100) idle.at(t);
+assert(idle.result().rows.length>=9);
+assert(idle.result().rows.every(r=>r.answer==='未回答'));
+assert.equal(idle.result().score,0);
+const background = setup(); background.start(); background.at(45000);
+assert.equal(background.result().duration_seconds,30);
+console.log('PASS: timing, phase changes, score, unanswered items, background deadline');
+
+
+const kick = setup(()=>.2); kick.el('#mode').value='hard'; kick.start();
+kick.at(1499); kick.key(' '); assert.equal(kick.el('#score').textContent,100);
+kick.at(34000); assert.equal(kick.result().rows[0].answer,'蹴る');
+assert.equal(kick.result().rows[0].reaction_ms,1499);
+const late = setup(()=>.2); late.el('#mode').value='hard'; late.start();
+late.at(1500); late.el('#kick').onclick(); assert.equal(late.el('#score').textContent,0);
+late.at(34000); assert.equal(late.result().rows[0].answer,'未回答');
+assert.equal(late.result().rows[0].exposure_ms,1500);
+const clickKick = setup(()=>.2); clickKick.el('#mode').value='hard'; clickKick.start();
+clickKick.at(500); clickKick.el('#kick').onclick(); assert.equal(clickKick.el('#score').textContent,100);
+clickKick.at(10000); clickKick.key(' '); assert.equal(clickKick.el('#score').textContent,100);
+for (let phase=0;phase<3;phase++) for (const blue of [true,false]) for (let shape=0;shape<3;shape++) {
+ let n=0; const values=[blue?.2:.8,.2,.2,(shape+.5)/3];
+ const run=setup(()=>values[n++%4]);run.el('#mode').value='hard';run.start();
+ const start=[0,12000,24000][phase]; if(start) run.at(start);
+ run.at(start+500);
+ const target=shape===phase;
+ const expected=target?'蹴る':blue?'右':'左';
+ run.el(expected==='蹴る'?'#kick':expected==='左'?'#left':'#right').onclick();
+ run.at(34000);
+ const row=run.result().rows.find(r=>r.phase===phase && r.answer!=='未回答');
+ assert(row.correct); assert.equal(row.limit_ms,target?1500:3000);
+ assert.equal(row.shape,['四角','丸','三角'][shape]);
+ assert.equal(row.star,false);
+}
+console.log('PASS: all hard-mode rules, click/Space, 1.5s deadline and paused input');
