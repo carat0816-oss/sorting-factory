@@ -55,7 +55,40 @@ python -m venv .venv
 
 ゲーム中はブラウザ内のperformance.now()で測定し、終了時にStreamlitへ一括送信します。研究用の反応時間測定ではなく、画面の描画遅延などを含むゲーム用途の計測です。タブを離れても時計は止まらず、戻った際に終了を判定します。
 
-データはセッション内だけに保持します。再プレイやブラウザ再読み込みで以前の結果は消えるため、必要なら先にCSVを保存してください。
+リザルト画面の「この記録を『みんなのデータ』に送る」で、プレイヤー名を入れてデータ提供に同意した回だけが保存されます（同意はプレイごと、名前は次の回にも引き継ぎ）。送らなかった回はセッション内だけに残り、再プレイやブラウザ再読み込みで消えます。
+
+## みんなのデータ（まとめて管理）
+
+サイドバーの「📊 みんなのデータ」で、送られた全員分の記録をまとめて見られます（ノーマル／ハード別、プレイヤーで絞り込み可）。
+
+- 🏆 ランキング：プレイヤーごとの回数・ベスト・平均スコア・平均正答率・判断時間（ハードは蹴り成功率・誤キックも）
+- 📈 伸び・速さと正確さ：何回目×スコア、判断時間×正答率の散布図と相関
+- 🔀 ルール別：全員分の荷物を合算したルールごとの成績、切り替え直後の比較、★付き荷物の比較
+- 📋 データ・CSV：一覧と、回ごと／荷物1個ごとのCSV書き出し
+
+### 保存先
+
+[reefmother-fps](https://github.com/carat0816-oss/reefmother-fps) と同じ仕組みです。
+
+- Streamlit の Secrets にスプレッドシートの設定があれば、**Googleスプレッドシート**の `runs` シートに1回＝1行でたまる（最初の保存でシートと見出し行を自動作成）
+- なければ手元の `data/runs.jsonl` に保存（動作確認用。Git には上げない。Community Cloud ではアプリの再起動で消える）
+
+**スプレッドシートを使う準備（最初の1回）**
+1. [Google Cloud Console](https://console.cloud.google.com/) でプロジェクトを作り、「Google Sheets API」と「Google Drive API」を有効にする
+2. サービスアカウントを作り、JSON の鍵をダウンロードする
+3. スプレッドシートを新しく作り、サービスアカウントのメールアドレスを「編集者」として共有する
+4. `.streamlit/secrets.toml.example` を見本に設定を書く（手元なら `.streamlit/secrets.toml`、Community Cloud なら「Settings → Secrets」）。reefmother-fps と同じ鍵を使い回してもよい（シートは別に作る）
+
+**スプレッドシートの列**（集計値はサーバー側でログから計算し直す）
+- `run_id` `received_at` `player` `played_at` `mode`
+- 成績：`score` `max_combo` `n_items` `n_answered` `n_correct` `n_unanswered` `acc`（正答率） `rt_median_ms`（判断時間の中央値）
+- ルール別：`acc_r1`〜`acc_r3` `rt_r1`〜`rt_r3`、切り替え後3秒以内／それ以降：`acc_after_switch` `rt_after_switch` `acc_later` `rt_later`
+- ハードのみ：`kick_rate` `kick_miss` `wrong_kick`
+- `items_json`：荷物1個ごとのログ（列の並びは `store.py` の `ITEM_COLS`）
+
+**運用のメモ**
+- 不適切な名前や、消してほしいと言われた記録は、スプレッドシートの行を消せばアプリからも消える（1分ほどで反映）
+- 読み込むのは新しい順に600回まで。1回の接続で送れるのは40回まで
 
 ## 検証
 
@@ -64,6 +97,6 @@ node test_game.mjs
 .venv\Scripts\python test_app.py
 ```
 
-ゲームテストにはNode.jsが必要です。ゲームの通常起動にNode.jsは不要です。ルール判定、制限時間、休憩、クリック・キー入力、得点、リザルト集計を検証します。
+ゲームテストにはNode.jsが必要です。ゲームの通常起動にNode.jsは不要です。ルール判定、制限時間、休憩、クリック・キー入力、得点、リザルト集計、記録の送信（同意・二重送信防止）、みんなのデータ画面を検証します。
 
 実装：[Streamlit Components v2](https://docs.streamlit.io/develop/api-reference/custom-components/st.components.v2.component)

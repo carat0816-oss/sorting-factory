@@ -5,8 +5,40 @@ import pandas as pd
 import streamlit as st
 import streamlit.components.v2 as components
 
+from shared_view import show_shared
+from store import clean_run, get_store
+
 ROOT = Path(__file__).resolve().parent
 st.set_page_config(page_title="仕分け工場 | 30秒チャレンジ", page_icon="📦", layout="centered")
+
+MAX_SHARED = 600        # 読み込む「みんなのデータ」の最大回数（新しい順）
+MAX_PER_SESSION = 40    # 1回の接続で受け付ける最大回数（いたずら対策）
+
+store = get_store()
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def load_shared() -> list[dict]:
+    return store.load(MAX_SHARED)
+
+
+with st.sidebar:
+    st.header("📦 仕分け工場")
+    page = st.radio("画面", ["🎮 遊ぶ", "📊 みんなのデータ"], key="page", label_visibility="collapsed")
+    st.caption("※ プレイ中に画面を切り替えると、そのプレイは中断されます")
+    try:
+        n_shared = len(load_shared())
+    except Exception as e:  # 保存先に一時的につながらなくてもゲームは遊べるようにする
+        n_shared = None
+        st.warning(f"データの読み込みに失敗しました：{e}")
+    st.caption(f"保存先：{store.label}" + (f" ／ 集まった記録：{n_shared} 回" if n_shared is not None else ""))
+    if store.kind == "local":
+        st.caption("※ Secrets にスプレッドシートの設定がないため、手元のファイルに保存しています")
+
+if page == "📊 みんなのデータ":
+    show_shared(load_shared, store)
+    st.stop()
+
 st.markdown("# 📦 仕分け工場")
 st.caption("実プレイ30秒 ・ 10秒ごとにルール変更＆2秒休憩")
 
@@ -19,6 +51,41 @@ def load_game(asset_version):
         css=(ROOT / "game.css").read_text(encoding="utf-8"),
         js=(ROOT / "game.js").read_text(encoding="utf-8"),
     )
+
+
+def share_run(result):
+    """このプレイを「みんなのデータ」に送る。同意した人の分だけ、1回につき1度だけ保存する。"""
+    play_id = st.session_state.play_id
+    saved = st.session_state.setdefault("saved_ids", set())
+    with st.container(border=True):
+        if play_id in saved:
+            st.success("この記録は「みんなのデータ」に送りました。サイドバーから全員分の分析を見られます。")
+            return
+        st.markdown("**📤 この記録を「みんなのデータ」に送る**")
+        # 名前は次のプレイでも使えるように覚えておく（同意はプレイごとに取り直す）
+        if "player_name" not in st.session_state:
+            st.session_state.player_name = st.session_state.get("last_player", "")
+        player = st.text_input("プレイヤー名（ニックネームにしてください）", max_chars=16, key="player_name",
+                               placeholder="例：しわけ名人")
+        consent = st.checkbox("データ提供に同意する（名前・スコア・荷物ごとの回答と判断時間が保存され、"
+                              "このアプリを使う全員が見られます）", key="consent")
+        if st.button("送る", disabled=not consent, key="share"):
+            if len(saved) >= MAX_PER_SESSION:
+                st.warning("この接続で送れる回数の上限に達しました。ページを読み込み直してください。")
+                return
+            run = clean_run(play_id, player, result)
+            if not run:
+                st.error("記録の形式がおかしいため、送れませんでした。")
+                return
+            try:
+                store.append(run)
+            except Exception as e:
+                st.error(f"データの保存に失敗しました：{e}")
+                return
+            saved.add(play_id)
+            st.session_state.last_player = player
+            load_shared.clear()
+            st.rerun()
 
 
 if "play_id" not in st.session_state:
@@ -42,6 +109,7 @@ else:
     accuracy.metric("回答した荷物の正答率", f"{correct / len(answered):.0%}" if answered else "—")
     combo.metric("最大コンボ", f'{result["max_combo"]} 連続')
     st.caption(f"回答数 {len(answered)} 個 ／ 正解 {correct} 個 ／ 未回答 {len(rows) - len(answered)} 個")
+    share_run(result)
     if result.get("mode") == "ハード":
         targets = [r for r in rows if r["expected"] == "蹴る"]
         successes = sum(r["correct"] for r in targets)
